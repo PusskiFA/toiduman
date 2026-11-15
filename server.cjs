@@ -33,8 +33,8 @@ function viewer(data) {
   const name = nickname && handle && nickname !== handle ? `${nickname} · @${handle}` : handle ? '@' + handle : nickname || 'TikTok ' + userId;
   return { userId, name: name.slice(0, 64), appearance: appearances.get(userId) };
 }
-function giftReaction(data, catalog) {
-  const details = [data.gift, data.extendedGiftInfo, catalog, data.giftDetails, data];
+function giftReaction(data) {
+  const details = [data.gift, data.giftDetails, data];
   const gift = details.map(info => info?.name || info?.giftName || info?.gift_name).find(Boolean) || 'TikTok';
   const coins = details.map(info => Number(info?.diamondCount || info?.diamond_count)).find(value => Number.isFinite(value) && value > 0) || 0;
   if (/crown|корон|тәж/i.test(gift)) return {gift, coins, action:'battle'};
@@ -56,7 +56,8 @@ sockets.on('connection', client => {
 async function connect(token) {
   if (token !== generation) return;
   update('connecting', 'Подключаемся к @' + username);
-  const current = new TikTokLiveConnection(username, { enableExtendedGiftInfo: true, processInitialData: false });
+  // Preloading the gift catalog requires a separate paid signing endpoint.
+  const current = new TikTokLiveConnection(username, { processInitialData: false });
   connection = current;
   current.on(WebcastEvent.CHAT, data => {
     if(token !== generation) return;
@@ -96,10 +97,7 @@ async function connect(token) {
     if (count <= prior) return;
     seen.set(key, count);
     if (seen.size > 5000) seen.delete(seen.keys().next().value);
-    const catalog = Array.isArray(current.availableGifts)
-      ? current.availableGifts.find(item => String(item.id) === String(giftId))
-      : undefined;
-    const gift = { type:'gift', ...guest, ...giftReaction(data, catalog), id:`${key}:${count}`,
+    const gift = { type:'gift', ...guest, ...giftReaction(data), id:`${key}:${count}`,
       combo:key, count:count-prior, total:count, at:Date.now() };
     history.push(gift); if (history.length > 150) history.shift(); broadcast(gift);
   });
