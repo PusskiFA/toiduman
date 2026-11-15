@@ -1,10 +1,6 @@
 ﻿import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone } from 'three/addons/utils/SkeletonUtils.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 const $ = id => document.getElementById(id);
 document.querySelectorAll('.gift-card-icon img').forEach(img => {
   function showIcon() {
@@ -19,16 +15,13 @@ const query = new URLSearchParams(location.search);
 const capture = query.has('capture');
 document.body.classList.toggle('capture', capture);
 const scene = new THREE.Scene(); scene.background = new THREE.Color('#080610'); scene.fog = new THREE.FogExp2('#090611', .028);
-const renderer = new THREE.WebGLRenderer({canvas:$('club'), antialias:true}); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.7)); renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .95;
+const canvas = $('club');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:false});
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = .95;
 const camera = new THREE.PerspectiveCamera(48, 1, .1, 100); camera.position.set(0, 6, 17); camera.lookAt(0, 2, -2);
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene,camera));
-composer.addPass(new UnrealBloomPass(new THREE.Vector2(1,1), .26, .55, 1.15));
-composer.addPass(new OutputPass());
 scene.add(new THREE.HemisphereLight(0xffe3c5,0x3d2136,1.5));
 const light = new THREE.DirectionalLight(0xffecd6,1.5); light.position.set(3,8,6); scene.add(light);
-const purple = new THREE.PointLight(0xb12aff,85,24); purple.position.set(-6,5,-3); scene.add(purple);
-const pink = new THREE.PointLight(0xffdaa8,30,22); pink.position.set(6,5,3); scene.add(pink);
 const material = (color, emissive=false) => new THREE.MeshStandardMaterial({color,metalness:.55,roughness:.28,...(emissive?{emissive:color,emissiveIntensity:3}:{})});
 const dark=material('#151322'), neon=material('#c17aff',true), cyan=material('#76ffe7',true);
 function box(w,h,d,x,y,z,mat=dark){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);mesh.position.set(x,y,z);scene.add(mesh);return mesh}
@@ -79,20 +72,20 @@ for (let i = 0; i < 24; i++) {
 for (const x of [-9,9]) box(.04,.016,16,x,.025,1,brass);
 for (const z of [-7,9]) box(18,.016,.04,0,.025,z,brass);
 box(13,.6,4,0,.25,-9);box(6,1.8,1.5,0,1.5,-9);box(6,.04,1.6,0,2.42,-9,neon);
-const bars=[];for(let i=0;i<32;i++)bars.push(box(.09,1,.05,-2.65+i*.17,1.4,-8.22,i%3?neon:cyan));
+const bars=[];for(let i=0;i<16;i++)bars.push(box(.13,1,.05,-2.55+i*.34,1.4,-8.22,i%3?neon:cyan));
 for(const x of [-9,9]){for(let y=0;y<3;y++){box(1.8,1.5,1.2,x,.9+y*1.6,-9);const speaker=new THREE.Mesh(new THREE.CylinderGeometry(.48,.48,.08,32),material('#060609'));speaker.rotation.x=Math.PI/2;speaker.position.set(x,.9+y*1.6,-8.35);scene.add(speaker)}}
 for(let i=0;i<5;i++){const frame=new THREE.Mesh(new THREE.TorusGeometry(5.3+i*.32,.025,8,100,Math.PI),i%2?cyan:neon);frame.position.set(0,2.7,-11+i*.05);scene.add(frame)}
 function textSprite(text,size=1,color='#ffffff'){const canvas=document.createElement('canvas');canvas.width=1024;canvas.height=128;const context=canvas.getContext('2d');context.font='600 60px Arial';context.fillStyle=color;context.textAlign='center';context.fillText(text,512,85);const texture=new THREE.CanvasTexture(canvas);const sprite=new THREE.Sprite(new THREE.SpriteMaterial({map:texture,transparent:true,depthWrite:false}));sprite.scale.set(size*8,size,1);return sprite}
 const sign=textSprite('ҚАЗАҚША КЛУБ БХБ',1.3,'#ead7ff');sign.position.set(0,5.2,-10.8);scene.add(sign);
-const beams=[];for(let i=0;i<16;i++){const beam=new THREE.Mesh(new THREE.ConeGeometry(.65,11,24,1,true),new THREE.MeshBasicMaterial({color:i%2?0xb967ff:0x65ffe6,transparent:true,opacity:.018,depthWrite:false,side:THREE.DoubleSide,blending:THREE.AdditiveBlending}));beam.position.set(i%2?-8:8,5,-7+Math.floor(i/2)*2.2);beam.rotation.z=(i-3.5)*.1;scene.add(beam);beams.push(beam)}
 const DANCE_MS = 60_000;
+const MAX_DANCERS = 10;
 let lastLikeGoal = 0, totalLikes = 0;
 let fireworksUntil = 0, galaxyUntil = 0;
 let battleTimer, discoUntil = 0, shashuUntil = 0, duet = null;
 const duetTickets = new Map();
 const DUET_WAIT_MS = 45_000;
 const DUET_MS = 16_000;
-const dancers=new Map(), pending=[], queue=[], processed=new Set();const humans = {}; let model,alertBusy=false,angle=0,burst=0;
+const dancers=new Map(), pending=[], queue=[], processed=new Set();const humans = {}; let model,alertBusy=false,angle=0;
 const CHAT_MS = 5500;
 const speechPending = new Map();
 
@@ -111,7 +104,7 @@ function showSpeech(event) {
   if (!model) {
     speechPending.delete(event.userId);
     speechPending.set(event.userId, event);
-    if (speechPending.size > 45) speechPending.delete(speechPending.keys().next().value);
+    if (speechPending.size > MAX_DANCERS) speechPending.delete(speechPending.keys().next().value);
     return;
   }
   const dancer = dancers.get(event.userId) || addDancer(event);
@@ -171,10 +164,11 @@ function outfit(texture, variant) {
   if (variants.has(variant)) return variants.get(variant);
   const image = texture.image;
   const canvas = document.createElement('canvas');
-  canvas.width = image.width;
-  canvas.height = image.height;
+  const scale = Math.min(1,512/Math.max(image.width,image.height));
+  canvas.width = Math.max(1,Math.round(image.width*scale));
+  canvas.height = Math.max(1,Math.round(image.height*scale));
   const context = canvas.getContext('2d');
-  context.drawImage(image, 0, 0);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
   const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
   const palette = [[.83,.32,.34],[.28,.68,.48],[.74,.62,.39],[.62,.44,.74]];
   const color = palette[(variant - 1) % palette.length];
@@ -211,7 +205,14 @@ function addDancer(event) {
     removeDancer(event.userId);
     event = { ...event, until: dancer.until };
   }
-  if (dancers.size >= 45) removeDancer(dancers.keys().next().value);
+  if (dancers.size >= MAX_DANCERS) {
+    const ids = [...dancers.keys()];
+    const oldest = ids.find(id => !duet?.ids.includes(id) && !duetTickets.has(id))
+      ?? ids.find(id => !duet?.ids.includes(id));
+    if (oldest === undefined) return;
+    removeDancer(oldest);
+    duetTickets.delete(oldest);
+  }
   const occupied = new Set(Array.from(dancers.values(), guest => guest.slot));
   let slot = dancer?.slot ?? 0;
   while (occupied.has(slot)) slot++;
@@ -286,7 +287,7 @@ function receive(event, quiet = false) {
   if (event.action === 'duet') {
     const at = event.at || Date.now();
     if (at + DUET_WAIT_MS > Date.now() && !duet?.ids.includes(event.userId)) {
-      if (duetTickets.size >= 45 && !duetTickets.has(event.userId)) duetTickets.delete(duetTickets.keys().next().value);
+      if (duetTickets.size >= MAX_DANCERS && !duetTickets.has(event.userId)) duetTickets.delete(duetTickets.keys().next().value);
       duetTickets.set(event.userId, at + DUET_WAIT_MS);
     }
   }
@@ -304,7 +305,6 @@ function receive(event, quiet = false) {
   if (quiet) return;
   if (event.action === 'galaxy') {
     galaxyUntil = Date.now() + 12000;
-    burst = 2;
   }
   if (event.action === 'battle') battle(event.name);
   queue.push(event);
@@ -331,11 +331,10 @@ function updateDuet(now) {
     dancer.until = Math.max(dancer.until,duet.until+700);
   }
 }
-function showNext(){if(alertBusy||!queue.length)return;alertBusy=true;const event=queue.shift();$('donor').textContent=event.name;document.querySelector('.gift-icon').textContent=({join:'🌹',circle:'🎩',dance:'💗',flip:'✨',duet:'🍩',shashu:'✦',breakdance:'🔥',battle:'👑',fireworks:'🎆',galaxy:'🌌'})[event.action]||'🎁';$('gift-detail').textContent=({join:'залға қош келдің!',circle:'ортада бірге билейміз!',dance:'жеке би алаңы сенікі!',fireworks:'10 000 лайк · отшашу!',galaxy:'Ғаламшар шоуы!',flip:'Акробатикалық сальто!',duet:'Жұптық вальске шақыру!',shashu:'Шашу! Ортақ би басталды!',breakdance:'Брейк-данс!',battle:'Би батлы басталды!'})[event.action]||'рақмет, би алаңы сенікі!';if(event.coins) $('gift-detail').textContent+= ' · '+event.coins+' монета';$('combo').textContent=event.action==='fireworks'?'♥':'×'+event.total;$('gift-label').textContent=event.demo?'СЫЙЛЫҚТЫҢ ДЕМОСЫ':'СЫЙЛЫҒЫҢА РАҚМЕТ';$('alert').classList.add('show');burst=event.action==='battle'?1.5:.5;setTimeout(()=>{$('alert').classList.remove('show');setTimeout(()=>{alertBusy=false;showNext()},500)},3500)}
+function showNext(){if(alertBusy||!queue.length)return;alertBusy=true;const event=queue.shift();$('donor').textContent=event.name;document.querySelector('.gift-icon').textContent=({join:'🌹',circle:'🎩',dance:'💗',flip:'✨',duet:'🍩',shashu:'✦',breakdance:'🔥',battle:'👑',fireworks:'🎆',galaxy:'🌌'})[event.action]||'🎁';$('gift-detail').textContent=({join:'залға қош келдің!',circle:'ортада бірге билейміз!',dance:'жеке би алаңы сенікі!',fireworks:'10 000 лайк · отшашу!',galaxy:'Ғаламшар шоуы!',flip:'Акробатикалық сальто!',duet:'Жұптық вальске шақыру!',shashu:'Шашу! Ортақ би басталды!',breakdance:'Брейк-данс!',battle:'Би батлы басталды!'})[event.action]||'рақмет, би алаңы сенікі!';if(event.coins) $('gift-detail').textContent+= ' · '+event.coins+' монета';$('combo').textContent=event.action==='fireworks'?'♥':'×'+event.total;$('gift-label').textContent=event.demo?'СЫЙЛЫҚТЫҢ ДЕМОСЫ':'СЫЙЛЫҒЫҢА РАҚМЕТ';$('alert').classList.add('show');setTimeout(()=>{$('alert').classList.remove('show');setTimeout(()=>{alertBusy=false;showNext()},500)},3500)}
 function battle(name) {
   document.body.classList.add('battle');
   $('battle-name').textContent = name + ' · БИ БАТЛЫ';
-  burst = 1.5;
   clearTimeout(battleTimer);
   battleTimer = setTimeout(() => document.body.classList.remove('battle'), 8000);
 }
@@ -425,25 +424,11 @@ for (let i = 0; i < 16; i++) {
   const a = i * Math.PI / 8;
   box(.065,.33,.065,Math.cos(a)*2.1,7,Math.sin(a)*2.1-3,candle);
 }
-const warmLight = new THREE.PointLight(0xffbd63,70,22,1.4);
-warmLight.position.set(0,6,-3);
-scene.add(warmLight);
-const centerWash = new THREE.SpotLight(0xffe2bb,145,25,.55,.85,1.25);
+const centerWash = new THREE.SpotLight(0xffe2bb,100,25,.59,.85,1.25);
 centerWash.position.set(0,10,2);
 centerWash.target.position.copy(floorCenter);
 scene.add(centerWash,centerWash.target);
-const overhead = [0xc286ff,0x57eaff,0xffac71].map((color,index) => {
-  const lamp = new THREE.SpotLight(color,78,22,.29,.78,1.3);
-  const angle = index * Math.PI * 2 / 3;
-  lamp.position.set(Math.cos(angle)*3.8,8.5,floorCenter.z+Math.sin(angle)*3.8);
-  const beam = new THREE.Mesh(new THREE.ConeGeometry(1.95,1,24,1,true),
-    new THREE.MeshBasicMaterial({color, transparent:true, opacity:.027, side:THREE.DoubleSide, depthWrite:false, blending:THREE.AdditiveBlending}));
-  scene.add(lamp,lamp.target,beam);
-  return {lamp,beam};
-});
-const beamAxis = new THREE.Vector3(0,1,0);
-const beamDirection = new THREE.Vector3();
-const confettiCount = 100;
+const confettiCount = 40;
 const confettiGeometry = new THREE.BufferGeometry();
 const confettiPositions = new Float32Array(confettiCount*3);
 const confettiColors = new Float32Array(confettiCount*3);
@@ -462,18 +447,14 @@ scene.add(confetti);
 function startShashu() {
   shashuUntil = Date.now() + 9000;
 }
-const spots=[];
-for(let i=0;i<8;i++){
- const spot=new THREE.SpotLight(i%2?0xd44e9d:0x41b6ec,90,22,.38,.7,1.3);
- spot.position.set(i%2?-7:7,7,-6+i*1.8); scene.add(spot,spot.target); spots.push(spot);
- box(.2,5,.2,i%2?-11:11,2.5,-6+i*2, i%2?neon:cyan);
+for (const side of [-1,1]) {
+  box(.16,4,.16,side*11,2,-4,side<0 ? neon : cyan);
 }
 for(const side of [-1,1])for(let z=-4;z<=6;z+=5){
  box(2.2,.65,2,side*11.45,.5,z,material('#461c43'));box(.4,1.2,2,side*11,1,z,material('#461c43'));
  const table=new THREE.Mesh(new THREE.CylinderGeometry(.85,.85,.73,32),linen);table.position.set(side*10,.5,z);scene.add(table);box(.09,.28,.09,side*10,1,z,candle);
 }
 const disco=new THREE.Mesh(new THREE.SphereGeometry(.7,24,16),new THREE.MeshStandardMaterial({color:0xdce5ff,metalness:1,roughness:.12,flatShading:true}));disco.position.set(0,7,1);scene.add(disco);
-const dustGeometry=new THREE.BufferGeometry(); const dustPositions=new Float32Array(900);for(let i=0;i<900;i+=3){dustPositions[i]=(Math.random()-.5)*22;dustPositions[i+1]=Math.random()*8;dustPositions[i+2]=(Math.random()-.5)*20;}dustGeometry.setAttribute('position',new THREE.BufferAttribute(dustPositions,3));const dust=new THREE.Points(dustGeometry,new THREE.PointsMaterial({color:0xd6b6ff,size:.035,transparent:true,opacity:.5}));scene.add(dust);
 
 const offset = new THREE.Quaternion(), angles = new THREE.Euler();
 const destination = new THREE.Vector3();
@@ -587,11 +568,15 @@ function animateGuest(dancer, dt, time, pairIndex) {
   dancer.root.scale.setScalar(Math.max(.01, Math.min(1, age * 2, remaining * 1.8)));
   dancer.ring.visible = dancer.highlight > now;
 }
-const clock = new THREE.Clock();
-function render() {
+const FRAME_MS = 1000 / 30;
+let lastDraw = null, nextDraw = 0, contextLost = false;
+function render(timestamp) {
   requestAnimationFrame(render);
-  const dt = Math.min(clock.getDelta(), .05);
-  const time = clock.elapsedTime;
+  if (contextLost || document.hidden || timestamp + .25 < nextDraw) return;
+  const dt = lastDraw === null ? 1/30 : Math.min((timestamp-lastDraw)/1000,.1);
+  lastDraw = timestamp;
+  nextDraw = nextDraw ? Math.max(nextDraw + FRAME_MS, timestamp + .25) : timestamp + FRAME_MS;
+  const time = timestamp / 1000;
   const now = Date.now();
   updateDuet(now);
   const pulse = Math.exp(-4 * ((time * 2) % 1));
@@ -608,18 +593,8 @@ function render() {
     : ['Екі пончик, бір вальс','Екі қонақ бір-бір пончик жіберсе, ортада жұп болып вальс билейді.'];
   if ($('mission-title').textContent !== title) $('mission-title').textContent = title;
   if ($('mission-detail').textContent !== detail) $('mission-detail').textContent = detail;
-  centerWash.intensity = duet ? 215 : 145 + pulse*35;
-  overhead.forEach(({lamp,beam},i) => {
-    const angle = time*.8 + i*Math.PI*2/3;
-    const radius = duet ? .8 : 2.3;
-    lamp.target.position.set(Math.cos(angle)*radius,0,floorCenter.z + Math.sin(angle)*radius);
-    lamp.intensity = 78 + pulse * (discoMode ? 105 : 38);
-    beamDirection.subVectors(lamp.position,lamp.target.position);
-    beam.scale.y = beamDirection.length();
-    beam.quaternion.setFromUnitVectors(beamAxis,beamDirection.normalize());
-    beam.position.copy(lamp.position).lerp(lamp.target.position,.5);
-    beam.material.opacity = .022 + pulse * (discoMode ? .042 : .014);
-  });
+  centerWash.color.setHex(galaxy ? 0x9ba9ff : 0xffe2bb);
+  centerWash.intensity = duet ? 135 : discoMode ? 105 + pulse*15 : 100;
   floorTrim[0].material.color.setHex(galaxy ? 0x8da9ff : duet ? 0xffe1a1 : discoMode ? 0xff93c5 : 0xffba68);
   danceCircle.material.color.setHex(galaxy ? 0x302562 : 0x49263e);
   const progress = fireworks ? 10000 : totalLikes % 10000;
@@ -638,7 +613,7 @@ function render() {
         confettiPositions[i*3+1] = .7+height*.65 + Math.sin(orbit*2)*.38;
         confettiPositions[i*3+2] = floorCenter.z+Math.sin(orbit)*radius;
       } else if (fireworks) {
-        const cluster = Math.floor(i/25);
+        const cluster = Math.floor(i/10);
         const phase = (age*.72 + cluster*.19)%1;
         confettiPositions[i*3] = (cluster-1.5)*2.55 + Math.cos(angle)*radius*.46*phase;
         confettiPositions[i*3+1] = 4.25 + Math.sin(angle)*height*.42*phase - 1.35*phase*phase;
@@ -652,21 +627,7 @@ function render() {
     confettiGeometry.attributes.position.needsUpdate = true;
   }
   disco.rotation.y = time * (discoMode ? 1.8 : .3);
-  dust.rotation.y = time * .015;
-  spots.forEach((spot,i) => {
-    spot.target.position.set(Math.sin(time * .56 + i) * 6, 0, Math.cos(time * .4 + i) * 7);
-    spot.color.setHex(galaxy ? (i%2 ? 0x5645e7 : 0x27e9ee) : i % 2 ? (discoMode ? 0xffba49 : 0xd44e9d) : (discoMode ? 0xa575ff : 0x41b6ec));
-    spot.intensity = 26 + pulse * (discoMode ? 60 : 22) + burst * 30;
-  });
-  bars.forEach((bar,i) => { bar.scale.y = .30 + Math.abs(Math.sin(time * 4 + i * .6)) * (.4 + pulse * .6); });
-  beams.forEach((beam,i) => {
-    beam.rotation.z = Math.sin(time * .35 + i) * .4;
-    beam.rotation.x = Math.cos(time * .27 + i) * .25;
-    beam.material.opacity = .021 + pulse * .012;
-  });
-  burst = Math.max(0, burst - dt * .22);
-  pink.intensity = 22 + burst * 22;
-  purple.intensity = 30 + pulse * 14;
+  bars.forEach((bar,i) => { bar.scale.y = .45 + Math.abs(Math.sin(time*2.5+i*.6)) * .48; });
   for (const [id,dancer] of dancers) {
     if (now >= dancer.until) { removeDancer(id); continue; }
     if (dancer.speech) {
@@ -678,10 +639,35 @@ function render() {
   }
   camera.position.x = angle === 0 ? Math.sin(time * .09) * .7 : angle === 1 ? 9 : -9;
   camera.lookAt(0,1.8,0);
-  $('count').textContent = dancers.size;
-  composer.render();
+  const count = String(dancers.size);
+  if ($('count').textContent !== count) $('count').textContent = count;
+  renderer.render(scene,camera);
 }
-function resize(){camera.aspect=innerWidth/innerHeight;camera.position.z=camera.aspect<.8?26:19;camera.fov=camera.aspect<.8?55:48;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight);composer.setSize(innerWidth,innerHeight)}addEventListener('resize',resize);resize();render();
+function resize() {
+  const width = Math.max(1,canvas.clientWidth), height = Math.max(1,canvas.clientHeight);
+  camera.aspect = width/height;
+  camera.position.z = camera.aspect < .8 ? 26 : 19;
+  camera.fov = camera.aspect < .8 ? 55 : 48;
+  camera.updateProjectionMatrix();
+  renderer.setPixelRatio(Math.min(.8,Math.sqrt(650000/(width*height))));
+  renderer.setSize(width,height,false);
+}
+function resetFrameTiming() {
+  lastDraw = null;
+  nextDraw = 0;
+}
+canvas.addEventListener('webglcontextlost',event => {
+  event.preventDefault();
+  contextLost = true;
+});
+canvas.addEventListener('webglcontextrestored',() => {
+  contextLost = false;
+  resetFrameTiming();
+});
+document.addEventListener('visibilitychange',resetFrameTiming);
+window.addEventListener('resize',resize);
+resize();
+requestAnimationFrame(render);
 function setPanel(open) {
   $('settings').classList.toggle('open', open);
   $('settings').inert = !open;
@@ -733,7 +719,6 @@ $('preview').onclick = () => {
 };
 function startFireworks(demo = false) {
   fireworksUntil = Date.now() + 6000;
-  burst = 1.4;
   queue.push({name:'Барша көрермен', gift:'10 000 лайк', action:'fireworks', demo});
   showNext();
 }
@@ -761,10 +746,18 @@ function openSocket() {
         break;
       }
       case 'likes': updateLikes(data.count,true); break;
-      case 'history':
+      case 'history': {
         updateLikes(data.likes,false);
-        data.gifts.filter(gift=>Date.now()-gift.at<DANCE_MS).forEach(gift=>receive(gift,true));
+        const recent = new Map();
+        const cutoff = Date.now() - DANCE_MS;
+        for (const gift of data.gifts) {
+          if (gift.at <= cutoff) continue;
+          recent.delete(gift.userId);
+          recent.set(gift.userId,gift);
+        }
+        for (const gift of [...recent.values()].slice(-MAX_DANCERS)) receive(gift,true);
         break;
+      }
       case 'reset':
         for (const id of dancers.keys()) removeDancer(id);
         processed.clear();
