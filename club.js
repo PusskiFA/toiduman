@@ -21,7 +21,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = .95;
 const camera = new THREE.PerspectiveCamera(48, 1, .1, 100); camera.position.set(0, 6, 17); camera.lookAt(0, 2, -2);
 scene.add(new THREE.HemisphereLight(0xffe3c5,0x3d2136,1.5));
-const light = new THREE.DirectionalLight(0xffecd6,1.5); light.position.set(3,8,6); scene.add(light);
+const light = new THREE.DirectionalLight(0xffe0bf,1.7); light.position.set(3,8,6); scene.add(light);
 const material = (color, emissive=false) => new THREE.MeshStandardMaterial({color,metalness:.55,roughness:.28,...(emissive?{emissive:color,emissiveIntensity:3}:{})});
 const dark=material('#151322'), neon=material('#c17aff',true), cyan=material('#76ffe7',true);
 function box(w,h,d,x,y,z,mat=dark){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);mesh.position.set(x,y,z);scene.add(mesh);return mesh}
@@ -86,6 +86,72 @@ const duetTickets = new Map();
 const DUET_WAIT_MS = 45_000;
 const DUET_MS = 16_000;
 const dancers=new Map(), pending=[], queue=[], processed=new Set();const humans = {}; let model,alertBusy=false,angle=0;
+const guestLayer = $('guest-labels');
+const recentGuest = $('recent-guest');
+let arrivalUntil = 0;
+let stageWidth = 1, stageHeight = 1;
+const namePosition = new THREE.Vector3();
+let nextArrivalId, nextArrivalAt = 0;
+
+function guestBadge(event) {
+  const badge = document.createElement('div');
+  badge.className = 'guest-badge';
+  const avatar = document.createElement('span');
+  avatar.className = 'guest-photo';
+  avatar.textContent = Array.from(event.name || '?')[0].toUpperCase();
+  if (event.thumbnail) {
+    const image = document.createElement('img');
+    image.alt = '';
+    image.referrerPolicy = 'no-referrer';
+    image.addEventListener('error',()=>image.remove(),{once:true});
+    image.src = event.thumbnail;
+    avatar.append(image);
+  }
+  const name = document.createElement('b');
+  name.textContent = event.name;
+  badge.append(avatar,name);
+  return badge;
+}
+
+function announceEntrance(event) {
+  const time = Date.now();
+  if (time < nextArrivalAt || nextArrivalId === event.userId && time < arrivalUntil) return;
+  nextArrivalAt = time + 1800;
+  nextArrivalId = event.userId;
+  arrivalUntil = time + 3200;
+  const badge = guestBadge(event);
+  const description = document.createElement('span');
+  description.textContent = ' залға кірді';
+  badge.append(description);
+  recentGuest.replaceChildren(badge);
+  recentGuest.hidden = false;
+}
+
+function positionGuestNames(now) {
+  camera.updateMatrixWorld();
+  const positions = [];
+  for (const dancer of dancers.values()) {
+    const point = namePosition.copy(dancer.root.position);
+    point.y += dancer.labelHeight * dancer.root.scale.y;
+    point.project(camera);
+    const visible = point.z > -1 && point.z < 1 && Math.abs(point.x) < 1.13 && Math.abs(point.y) < 1.13;
+    dancer.label.hidden = !visible;
+    if (visible) positions.push({dancer,x:(point.x+1)*stageWidth*.5,y:(1-point.y)*stageHeight*.5});
+  }
+  positions.sort((a,b)=>b.y-a.y);
+  for (let i=0;i<positions.length;i++) {
+    const item = positions[i];
+    const width = Math.min(stageWidth*.36, 156, 32 + item.dancer.name.length*8);
+    item.x = THREE.MathUtils.clamp(item.x,width*.5+4,stageWidth-width*.5-4);
+    for (let j=i-1;j>=0;j--) {
+      const other = positions[j];
+      if (Math.abs(item.x-other.x) < width*.5 + other.width*.5 + 4 && Math.abs(item.y-other.y) < 26) item.y = other.y-26;
+    }
+    item.width = width;
+    item.dancer.label.style.transform = `translate(${Math.round(item.x)}px,${Math.round(item.y)}px) translate(-50%,-100%)`;
+  }
+  if (!recentGuest.hidden && now >= arrivalUntil) recentGuest.hidden = true;
+}
 const CHAT_MS = 5500;
 const speechPending = new Map();
 
@@ -236,10 +302,8 @@ function addDancer(event) {
   });
   root.add(pivot);
   pivot.add(body);
-  const label = textSprite(event.name,.40);
-  label.position.y = 3.05;
-  label.material.depthTest = false;
-  root.add(label);
+  const label = guestBadge(event);
+  guestLayer.append(label);
   const ring = new THREE.Mesh(new THREE.TorusGeometry(.6,.016,8,40),cyan);
   ring.rotation.x = Math.PI / 2;
   ring.position.y = .05;
@@ -266,13 +330,13 @@ function addDancer(event) {
   body.updateWorldMatrix(true, true);
   const baseY = -new THREE.Box3().setFromObject(body).min.y + root.position.y;
   body.position.y += baseY;
-  dancer = { name:event.name, appearance, slot, home, root, pivot, body, label, mixer, action, joints, ring, facing:0,
+  dancer = { name:event.name, appearance, slot, home, root, pivot, body, label, labelHeight:2.65*heightScale+.3, mixer, action, joints, ring, facing:0,
     phase:slot * .79, groove:identity % 3, combo:dancer?.combo, started:dancer?.started, until:event.until ?? until, highlight:now + 3000, entered:performance.now(),
     move: dancer?.move || 'join', boost: dancer?.boost || 0 };
   dancers.set(event.userId,dancer);
   return dancer;
 }
-function removeDancer(id){const d=dancers.get(id);clearSpeech(d);scene.remove(d.root);d.mixer.stopAllAction();d.mixer.uncacheRoot(d.body);d.label.material.map.dispose();d.label.material.dispose();d.ring.geometry.dispose();d.body.traverse(mesh=>{if(mesh.isMesh) for(const material of [mesh.material].flat())material.dispose()});dancers.delete(id)}
+function removeDancer(id){const d=dancers.get(id);clearSpeech(d);scene.remove(d.root);d.mixer.stopAllAction();d.mixer.uncacheRoot(d.body);d.label.remove();d.ring.geometry.dispose();d.body.traverse(mesh=>{if(mesh.isMesh) for(const material of [mesh.material].flat())material.dispose()});dancers.delete(id)}
 function receive(event, quiet = false) {
   if (!model) {
     if (pending.length >= 150) pending.shift();
@@ -593,8 +657,8 @@ function render(timestamp) {
     : ['Екі пончик, бір вальс','Екі қонақ бір-бір пончик жіберсе, ортада жұп болып вальс билейді.'];
   if ($('mission-title').textContent !== title) $('mission-title').textContent = title;
   if ($('mission-detail').textContent !== detail) $('mission-detail').textContent = detail;
-  centerWash.color.setHex(galaxy ? 0x9ba9ff : 0xffe2bb);
-  centerWash.intensity = duet ? 135 : discoMode ? 105 + pulse*15 : 100;
+  centerWash.color.setHex(galaxy ? 0x9bb7ff : discoMode ? 0xfca6cd : 0xffd3a5);
+  centerWash.intensity = duet ? 145 : discoMode ? 117 + pulse*15 : 112;
   floorTrim[0].material.color.setHex(galaxy ? 0x8da9ff : duet ? 0xffe1a1 : discoMode ? 0xff93c5 : 0xffba68);
   danceCircle.material.color.setHex(galaxy ? 0x302562 : 0x49263e);
   const progress = fireworks ? 10000 : totalLikes % 10000;
@@ -639,12 +703,15 @@ function render(timestamp) {
   }
   camera.position.x = angle === 0 ? Math.sin(time * .09) * .7 : angle === 1 ? 9 : -9;
   camera.lookAt(0,1.8,0);
+  positionGuestNames(now);
   const count = String(dancers.size);
   if ($('count').textContent !== count) $('count').textContent = count;
   renderer.render(scene,camera);
 }
 function resize() {
   const width = Math.max(1,canvas.clientWidth), height = Math.max(1,canvas.clientHeight);
+  stageWidth = width;
+  stageHeight = height;
   camera.aspect = width/height;
   camera.position.z = camera.aspect < .8 ? 26 : 19;
   camera.fov = camera.aspect < .8 ? 55 : 48;
@@ -741,7 +808,8 @@ function openSocket() {
       case 'join': {
         const existing = dancers.get(data.userId);
         if (!existing || (data.appearance && data.appearance !== existing.appearance)) {
-          receive({...data,id:'join:' + data.userId + ':' + Date.now()},true);
+          receive({...data,id:'join:' + data.userId + ':' + data.at},true);
+          if (!existing) announceEntrance(data);
         }
         break;
       }
@@ -749,19 +817,24 @@ function openSocket() {
       case 'history': {
         updateLikes(data.likes,false);
         const recent = new Map();
+        for (const guest of data.entrances || []) recent.set(guest.userId,{...guest,id:'join:' + guest.userId + ':' + guest.at});
         const cutoff = Date.now() - DANCE_MS;
         for (const gift of data.gifts) {
           if (gift.at <= cutoff) continue;
+          if (recent.get(gift.userId)?.at > gift.at) continue;
           recent.delete(gift.userId);
           recent.set(gift.userId,gift);
         }
-        for (const gift of [...recent.values()].slice(-MAX_DANCERS)) receive(gift,true);
+        for (const gift of [...recent.values()].sort((a,b)=>a.at-b.at).slice(-MAX_DANCERS)) receive(gift,true);
         break;
       }
       case 'reset':
         for (const id of dancers.keys()) removeDancer(id);
         processed.clear();
         pending.length = 0;
+        recentGuest.hidden = true;
+        nextArrivalAt = arrivalUntil = 0;
+        nextArrivalId = undefined;
         speechPending.clear();
         queue.length = 0;
         lastLikeGoal = totalLikes = fireworksUntil = galaxyUntil = discoUntil = shashuUntil = 0;

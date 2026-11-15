@@ -22,16 +22,20 @@ function authorizeAdmin(req, res, next) {
 const sockets = new WebSocketServer({ server });
 let connection, generation = 0, retry, username = '', status = { state: 'offline' }, likeTotal = 0;
 const history = [], seen = new Map(), appearances = new Map();
+const recentEntrances = new Map();
 function broadcast(event) { for (const client of sockets.clients) if (client.readyState === 1) client.send(JSON.stringify(event)); }
 function update(state, message = '') { status = { state, message, username }; broadcast({ type: 'status', ...status }); }
 function viewer(data) {
   const user = data.user || data;
-  const handle = String(user.uniqueId || '').trim();
-  const userId = String(user.userId || user.id || user.idStr || data.userId || handle);
-  if (!userId || userId === '0') return;
+  const handle = String(user.uniqueId || user.displayId || '').trim();
+  const userId = [user.id,user.idStr,user.userId,data.userId,handle]
+    .map(value=>String(value ?? '').trim()).find(value=>value && value !== '0');
+  if (!userId) return;
   const nickname = String(user.nickname || '').trim();
-  const name = nickname && handle && nickname !== handle ? `${nickname} · @${handle}` : handle ? '@' + handle : nickname || 'TikTok ' + userId;
-  return { userId, name: name.slice(0, 64), appearance: appearances.get(userId) };
+  const name = nickname || (handle ? '@' + handle : 'TikTok ' + userId);
+  const thumbnail = [user.avatarThumb?.urlList?.[0],user.avatarMedium?.urlList?.[0],user.profilePictureUrl]
+    .find(value=>typeof value === 'string' && /^https:\/\/[^/]+\.(?:tiktokcdn\.com|tiktokcdn-us\.com|tiktokv\.com)\//i.test(value));
+  return {userId,name:name.slice(0,64),handle,thumbnail,appearance:appearances.get(userId)};
 }
 function giftReaction(data) {
   const details = [data.gift, data.giftDetails, data];
@@ -51,7 +55,9 @@ function giftReaction(data) {
 }
 sockets.on('connection', client => {
   client.send(JSON.stringify({ type:'status', ...status }));
-  client.send(JSON.stringify({ type:'history', gifts:history, likes:likeTotal }));
+  const cutoff = Date.now() - 60000;
+  client.send(JSON.stringify({type:'history',gifts:history,likes:likeTotal,
+    entrances:[...recentEntrances.values()].filter(guest=>guest.at>cutoff)}));
 });
 async function connect(token) {
   if (token !== generation) return;
@@ -75,9 +81,16 @@ async function connect(token) {
     broadcast({type:'chat', ...guest, message:Array.from(comment).slice(0, 100).join(''), at});
   });
   current.on(WebcastEvent.MEMBER, data => {
-    if (token !== generation || Number(data.action) !== 1) return;
+    if (token !== generation) return;
+    const action = Number(data.action ?? 0);
+    if (action !== 0 && action !== 1) return;
     const guest = viewer(data);
-    if (guest) broadcast({type:'join', ...guest, at:Date.now()});
+    if (!guest) return;
+    const event = {type:'join',...guest,at:Date.now()};
+    recentEntrances.delete(guest.userId);
+    recentEntrances.set(guest.userId,event);
+    if (recentEntrances.size > 10) recentEntrances.delete(recentEntrances.keys().next().value);
+    broadcast(event);
   });
   current.on(WebcastEvent.LIKE, data => {
     if (token !== generation) return;
@@ -111,7 +124,7 @@ function schedule(token, message) { clearTimeout(retry); update('retrying', mess
 app.post('/api/connect', authorizeAdmin, (req, res) => {
   const name = String(req.body.username || '').trim().replace(/^@/, '');
   if (!/^[\w.]{2,32}$/.test(name)) return res.status(400).json({ error: 'Введите ник TikTok без ссылки' });
-  generation++; clearTimeout(retry); connection?.disconnect(); username = name; likeTotal = 0; history.length = 0; seen.clear(); broadcast({ type: 'reset' }); connect(generation); res.json({ ok: true });
+  generation++; clearTimeout(retry); connection?.disconnect(); username = name; likeTotal = 0; history.length = 0; seen.clear(); recentEntrances.clear(); appearances.clear(); broadcast({ type: 'reset' }); connect(generation); res.json({ ok: true });
 });
 app.post('/api/disconnect', authorizeAdmin, (_, res) => { generation++; clearTimeout(retry); connection?.disconnect(); connection = null; update('offline', 'Отключено'); res.json({ ok: true }); });
 app.get('/api/status', (_, res) => res.json({...status, requiresKey:Boolean(adminKey)}));

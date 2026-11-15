@@ -37,3 +37,15 @@ body:has(#settings-toggle:not([hidden])) .live-status{right:190px}
 .like-mission{display:grid;grid-template-columns:1fr auto;gap:5px 12px;max-width:380px;padding:8px 12px;border:1px solid #d7a96455;background:#24171ce8;border-radius:9px;color:#ffe2b1;font-size:12px}
 .like-mission strong{font-variant-numeric:tabular-nums}.like-mission progress{grid-column:span 2;width:100%;height:5px;accent-color:#ffbc65}
 #admin-key-box[hidden]{display:none}
+#guest-labels{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:1}
+.guest-badge{display:flex;align-items:center;gap:5px;padding:3px 7px 3px 3px;background:#160e1bee;border:1px solid #edb87992;border-radius:999px;color:#fff6eb;white-space:nowrap}
+#guest-labels>.guest-badge{position:absolute;left:0;top:0;max-width:min(156px,36vw);font-size:clamp(11px,1.15vw,14px)}
+.guest-badge[hidden],#recent-guest[hidden]{display:none}
+.guest-badge b{overflow:hidden;text-overflow:ellipsis}
+.guest-photo{display:grid;position:relative;place-items:center;flex:0 0 19px;width:19px;height:19px;background:#603b67;border-radius:50%;overflow:hidden;font-size:11px;font-weight:800}
+.guest-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+#recent-guest{position:absolute;z-index:2;left:28px;bottom:155px;max-width:65%;font-size:13px;pointer-events:none}
+#recent-guest .guest-badge{padding-right:10px}
+#recent-guest .guest-badge>span:last-child{color:#efc69b}
+#alert{z-index:3}
+@media(max-width:600px){#recent-guest{left:22px;bottom:165px}}
