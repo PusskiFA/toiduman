@@ -18,10 +18,10 @@ const scene = new THREE.Scene(); scene.background = new THREE.Color('#080610'); 
 const canvas = $('club');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:false});
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = .95;
+renderer.toneMappingExposure = 1.09;
 const camera = new THREE.PerspectiveCamera(48, 1, .1, 100); camera.position.set(0, 6, 17); camera.lookAt(0, 2, -2);
-scene.add(new THREE.HemisphereLight(0xffe3c5,0x3d2136,1.5));
-const light = new THREE.DirectionalLight(0xffe0bf,1.7); light.position.set(3,8,6); scene.add(light);
+scene.add(new THREE.HemisphereLight(0xffe8d7,0x63425d,1.7));
+const light = new THREE.DirectionalLight(0xffe0bf,1.85); light.position.set(3,8,6); scene.add(light);
 const material = (color, emissive=false) => new THREE.MeshStandardMaterial({color,metalness:.55,roughness:.28,...(emissive?{emissive:color,emissiveIntensity:3}:{})});
 const dark=material('#151322'), neon=material('#c17aff',true), cyan=material('#76ffe7',true);
 function box(w,h,d,x,y,z,mat=dark){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);mesh.position.set(x,y,z);scene.add(mesh);return mesh}
@@ -492,6 +492,21 @@ const centerWash = new THREE.SpotLight(0xffe2bb,100,25,.59,.85,1.25);
 centerWash.position.set(0,10,2);
 centerWash.target.position.copy(floorCenter);
 scene.add(centerWash,centerWash.target);
+const overheadBeam = new THREE.ConeGeometry(1,1,18,1,true);
+const beamUp = new THREE.Vector3(0,1,0);
+for (const [x,color] of [[-3.5,0x9b9dff],[0,0xffc980],[3.5,0xf79ddb]]) {
+  const origin = new THREE.Vector3(x,8.1,-1.6);
+  const target = new THREE.Vector3(x*.48,.07,floorCenter.z);
+  const axis = origin.clone().sub(target);
+  const beam = new THREE.Mesh(overheadBeam,new THREE.MeshBasicMaterial({
+    color,transparent:true,opacity:.048,depthWrite:false,blending:THREE.AdditiveBlending
+  }));
+  beam.position.copy(origin).lerp(target,.5);
+  beam.scale.set(1.65,axis.length(),1.65);
+  beam.quaternion.setFromUnitVectors(beamUp,axis.normalize());
+  scene.add(beam);
+  box(.31,.12,.31,origin.x,origin.y,origin.z,new THREE.MeshBasicMaterial({color}));
+}
 const confettiCount = 40;
 const confettiGeometry = new THREE.BufferGeometry();
 const confettiPositions = new Float32Array(confettiCount*3);
@@ -658,9 +673,9 @@ function render(timestamp) {
   if ($('mission-title').textContent !== title) $('mission-title').textContent = title;
   if ($('mission-detail').textContent !== detail) $('mission-detail').textContent = detail;
   centerWash.color.setHex(galaxy ? 0x9bb7ff : discoMode ? 0xfca6cd : 0xffd3a5);
-  centerWash.intensity = duet ? 145 : discoMode ? 117 + pulse*15 : 112;
+  centerWash.intensity = duet ? 170 : discoMode ? 140 + pulse*12 : 132;
   floorTrim[0].material.color.setHex(galaxy ? 0x8da9ff : duet ? 0xffe1a1 : discoMode ? 0xff93c5 : 0xffba68);
-  danceCircle.material.color.setHex(galaxy ? 0x302562 : 0x49263e);
+  danceCircle.material.color.setHex(galaxy ? 0x413783 : 0x633951);
   const progress = fireworks ? 10000 : totalLikes % 10000;
   if ($('mission-progress').value !== progress) {
     $('mission-progress').value = progress;
