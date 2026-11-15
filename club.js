@@ -14,7 +14,9 @@ document.querySelectorAll('.gift-card-icon img').forEach(img => {
 const query = new URLSearchParams(location.search);
 const capture = query.has('capture');
 document.body.classList.toggle('capture', capture);
-const scene = new THREE.Scene(); scene.background = new THREE.Color('#080610'); scene.fog = new THREE.FogExp2('#090611', .028);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color('#43291e');
+scene.fog = new THREE.FogExp2('#543425', .028);
 const canvas = $('club');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:false});
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -23,7 +25,7 @@ const camera = new THREE.PerspectiveCamera(48, 1, .1, 100); camera.position.set(
 scene.add(new THREE.HemisphereLight(0xffe8d7,0x63425d,1.7));
 const light = new THREE.DirectionalLight(0xffe0bf,1.85); light.position.set(3,8,6); scene.add(light);
 const material = (color, emissive=false) => new THREE.MeshStandardMaterial({color,metalness:.55,roughness:.28,...(emissive?{emissive:color,emissiveIntensity:3}:{})});
-const dark=material('#151322'), neon=material('#c17aff',true), cyan=material('#76ffe7',true);
+const dark=material('#482c22'), neon=material('#e69152',true), cyan=material('#f4cf8a',true);
 function box(w,h,d,x,y,z,mat=dark){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);mesh.position.set(x,y,z);scene.add(mesh);return mesh}
 box(26,.4,30,0,-.25,0); box(26,10,.4,0,5,-12); box(.4,10,30,-13,5,0); box(.4,10,30,13,5,0);
 const parquet = document.createElement('canvas');
@@ -512,7 +514,7 @@ const confettiGeometry = new THREE.BufferGeometry();
 const confettiPositions = new Float32Array(confettiCount*3);
 const confettiColors = new Float32Array(confettiCount*3);
 const confettiOrigin = [];
-const goldPalette = [0xffd278,0xe294ff,0xffa9ac,0x74ebde];
+const goldPalette = [0xffdf91,0xf6a65e,0xffebbc,0xc97947];
 for (let i=0;i<confettiCount;i++) {
   new THREE.Color(goldPalette[i%goldPalette.length]).toArray(confettiColors,i*3);
   confettiOrigin.push([Math.random()*Math.PI*2, Math.random()*5.5, 2+Math.random()*4, .7+Math.random()*1.8]);
@@ -523,6 +525,12 @@ const confetti = new THREE.Points(confettiGeometry,new THREE.PointsMaterial({siz
 confetti.frustumCulled = false;
 confetti.visible = false;
 scene.add(confetti);
+const effectRing = new THREE.Mesh(new THREE.RingGeometry(.94,1,64),
+  new THREE.MeshBasicMaterial({color:0xffc56d,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));
+effectRing.rotation.x = -Math.PI/2;
+effectRing.position.copy(floorCenter).y += .025;
+effectRing.visible = false;
+scene.add(effectRing);
 function startShashu() {
   shashuUntil = Date.now() + 9000;
 }
@@ -672,16 +680,23 @@ function render(timestamp) {
     : ['Екі пончик, бір вальс','Екі қонақ бір-бір пончик жіберсе, ортада жұп болып вальс билейді.'];
   if ($('mission-title').textContent !== title) $('mission-title').textContent = title;
   if ($('mission-detail').textContent !== detail) $('mission-detail').textContent = detail;
-  centerWash.color.setHex(galaxy ? 0x9bb7ff : discoMode ? 0xfca6cd : 0xffd3a5);
+  centerWash.color.setHex(galaxy ? 0xffc687 : discoMode ? 0xffae70 : 0xffd3a5);
   centerWash.intensity = duet ? 170 : discoMode ? 140 + pulse*12 : 132;
-  floorTrim[0].material.color.setHex(galaxy ? 0x8da9ff : duet ? 0xffe1a1 : discoMode ? 0xff93c5 : 0xffba68);
-  danceCircle.material.color.setHex(galaxy ? 0x413783 : 0x633951);
+  floorTrim[0].material.color.setHex(galaxy ? 0xffe2a3 : duet ? 0xffedcb : discoMode ? 0xffb376 : 0xe5a25f);
+  danceCircle.material.color.setHex(galaxy ? 0x7f422b : 0x623a2d);
   const progress = fireworks ? 10000 : totalLikes % 10000;
   if ($('mission-progress').value !== progress) {
     $('mission-progress').value = progress;
     $('mission-likes').textContent = String(progress).replace(/\B(?=(\d{3})+(?!\d))/g, ' ') + ' / 10 000';
   }
   confetti.visible = shashu || galaxy || fireworks;
+  effectRing.visible = galaxy || fireworks;
+  if (effectRing.visible) {
+    const age = galaxy ? 12-(galaxyUntil-now)/1000 : 6-(fireworksUntil-now)/1000;
+    const phase = (age / (galaxy ? 2.2 : 1.4)) % 1;
+    effectRing.scale.setScalar(.35+phase*6.15);
+    effectRing.material.opacity = .55*(1-phase);
+  }
   if (confetti.visible) {
     const age = galaxy ? 12-(galaxyUntil-now)/1000 : fireworks ? 6-(fireworksUntil-now)/1000 : 9-(shashuUntil-now)/1000;
     confettiOrigin.forEach(([angle,radius,height,speed],i) => {

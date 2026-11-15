@@ -49,3 +49,8 @@ body:has(#settings-toggle:not([hidden])) .live-status{right:190px}
 #recent-guest .guest-badge>span:last-child{color:#efc69b}
 #alert{z-index:3}
 @media(max-width:600px){#recent-guest{left:22px;bottom:165px}}
+body,#loading{background:#342117}
+.bottom{background:linear-gradient(transparent,#3d251ac9)}
+#alert{background:linear-gradient(110deg,#553222f0,#2c1b15f1);border-color:#f0ba7875;box-shadow:0 0 32px #e5a35c24}
+.guest-badge{background:#342118f2}
+.guest-photo{background:#7e4e33}
