@@ -1,4 +1,4 @@
-﻿const express = require('express');
+const express = require('express');
 const { WebSocketServer } = require('ws');
 const { timingSafeEqual } = require('node:crypto');
 const { TikTokLiveConnection, WebcastEvent } = require('tiktok-live-connector');
@@ -22,7 +22,7 @@ function authorizeAdmin(req, res, next) {
 const sockets = new WebSocketServer({ server });
 let connection, generation = 0, retry, username = '', status = { state: 'offline' }, likeTotal = 0;
 const history = [], seen = new Map(), appearances = new Map();
-const recentEntrances = new Map();
+
 function broadcast(event) { for (const client of sockets.clients) if (client.readyState === 1) client.send(JSON.stringify(event)); }
 function update(state, message = '') { status = { state, message, username }; broadcast({ type: 'status', ...status }); }
 function viewer(data) {
@@ -47,17 +47,15 @@ function giftReaction(data) {
   if (coins >= 100) return {gift, coins, action:'breakdance'};
   if (coins >= 30) return {gift, coins, action:'flip'};
   if (coins >= 10) return {gift, coins, action:'dance'};
-  if (coins >= 5) return {gift, coins, action:'circle'};
-  if (coins === 3) return {gift, coins, action:'shashu'};
+  if (coins >= 5) return {gift, coins, action:'shashu'};
+  if (!coins && /finger heart|саусақ/i.test(gift)) return {gift, coins:5, action:'shashu'};
   if (!coins && /heart|серд|жүрек/i.test(gift)) return {gift, coins, action:'dance'};
   if (!coins && /\bhat\b|шляп/i.test(gift)) return {gift, coins, action:'circle'};
   return {gift, coins, action:'join'};
 }
 sockets.on('connection', client => {
   client.send(JSON.stringify({ type:'status', ...status }));
-  const cutoff = Date.now() - 60000;
-  client.send(JSON.stringify({type:'history',gifts:history,likes:likeTotal,
-    entrances:[...recentEntrances.values()].filter(guest=>guest.at>cutoff)}));
+  client.send(JSON.stringify({type:'history', gifts:history, likes:likeTotal}));
 });
 async function connect(token) {
   if (token !== generation) return;
@@ -69,28 +67,18 @@ async function connect(token) {
     if(token !== generation) return;
     const comment = String(data.comment || '').replace(/\s+/gu, ' ').trim();
     if (!comment) return;
-    const appearance = new Map([['!м','man'],['!ж','woman'],['!male','man'],['!female','woman']]).get(comment.toLowerCase());
+    const command = comment.toLowerCase().replace(/^[!/]/, '');
+    const appearance = /^(boy|man|male|бала|ұл|парень|м)$/.test(command) ? 'man'
+      : /^(woman|girl|female|қыз|девушка|ж)$/.test(command) ? 'woman' : undefined;
     const guest = viewer(data);
     if (!guest) return;
-    if (appearance) appearances.set(guest.userId, appearance);
-    const at = Date.now();
     if (appearance) {
-      broadcast({type:'join', ...guest, appearance, at});
-      return;
+      appearances.set(guest.userId, appearance);
+      if (appearances.size > 5000) appearances.delete(appearances.keys().next().value);
+      for (const gift of history) if (gift.userId === guest.userId) gift.appearance = appearance;
     }
-    broadcast({type:'chat', ...guest, message:Array.from(comment).slice(0, 100).join(''), at});
-  });
-  current.on(WebcastEvent.MEMBER, data => {
-    if (token !== generation) return;
-    const action = Number(data.action ?? 0);
-    if (action !== 0 && action !== 1) return;
-    const guest = viewer(data);
-    if (!guest) return;
-    const event = {type:'join',...guest,at:Date.now()};
-    recentEntrances.delete(guest.userId);
-    recentEntrances.set(guest.userId,event);
-    if (recentEntrances.size > 10) recentEntrances.delete(recentEntrances.keys().next().value);
-    broadcast(event);
+    const at = Date.now();
+    broadcast({type:'chat', ...guest, appearance, message:Array.from(comment).slice(0, 100).join(''), at});
   });
   current.on(WebcastEvent.LIKE, data => {
     if (token !== generation) return;
@@ -124,9 +112,7 @@ function schedule(token, message) { clearTimeout(retry); update('retrying', mess
 app.post('/api/connect', authorizeAdmin, (req, res) => {
   const name = String(req.body.username || '').trim().replace(/^@/, '');
   if (!/^[\w.]{2,32}$/.test(name)) return res.status(400).json({ error: 'Введите ник TikTok без ссылки' });
-  generation++; clearTimeout(retry); connection?.disconnect(); username = name; likeTotal = 0; history.length = 0; seen.clear(); recentEntrances.clear(); appearances.clear(); broadcast({ type: 'reset' }); connect(generation); res.json({ ok: true });
+  generation++; clearTimeout(retry); connection?.disconnect(); username = name; likeTotal = 0; history.length = 0; seen.clear(); appearances.clear(); broadcast({ type: 'reset' }); connect(generation); res.json({ ok: true });
 });
 app.post('/api/disconnect', authorizeAdmin, (_, res) => { generation++; clearTimeout(retry); connection?.disconnect(); connection = null; update('offline', 'Отключено'); res.json({ ok: true }); });
 app.get('/api/status', (_, res) => res.json({...status, requiresKey:Boolean(adminKey)}));
-
-

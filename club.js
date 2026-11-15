@@ -15,8 +15,8 @@ const query = new URLSearchParams(location.search);
 const capture = query.has('capture');
 document.body.classList.toggle('capture', capture);
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#43291e');
-scene.fog = new THREE.FogExp2('#543425', .028);
+scene.background = new THREE.Color('#171c32');
+scene.fog = new THREE.FogExp2('#242b43', .018);
 const canvas = $('club');
 const renderer = new THREE.WebGLRenderer({canvas, antialias:false});
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -25,7 +25,7 @@ const camera = new THREE.PerspectiveCamera(48, 1, .1, 100); camera.position.set(
 scene.add(new THREE.HemisphereLight(0xffe8d7,0x63425d,1.7));
 const light = new THREE.DirectionalLight(0xffe0bf,1.85); light.position.set(3,8,6); scene.add(light);
 const material = (color, emissive=false) => new THREE.MeshStandardMaterial({color,metalness:.55,roughness:.28,...(emissive?{emissive:color,emissiveIntensity:3}:{})});
-const dark=material('#482c22'), neon=material('#e69152',true), cyan=material('#f4cf8a',true);
+const dark=material('#293247'), neon=material('#b69ce8',true), cyan=material('#77cfc9',true);
 function box(w,h,d,x,y,z,mat=dark){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);mesh.position.set(x,y,z);scene.add(mesh);return mesh}
 box(26,.4,30,0,-.25,0); box(26,10,.4,0,5,-12); box(.4,10,30,-13,5,0); box(.4,10,30,13,5,0);
 const parquet = document.createElement('canvas');
@@ -175,8 +175,20 @@ function showSpeech(event) {
     if (speechPending.size > MAX_DANCERS) speechPending.delete(speechPending.keys().next().value);
     return;
   }
-  const dancer = dancers.get(event.userId) || addDancer(event);
-  if (!dancer) return;
+  let dancer = dancers.get(event.userId);
+  if (!dancer) {
+    speechPending.set(event.userId, event);
+    if (speechPending.size > 100) speechPending.delete(speechPending.keys().next().value);
+    const name = document.createElement('strong');
+    name.textContent = event.name || 'Көрермен';
+    recentGuest.replaceChildren(name, document.createTextNode(' · ' + text.slice(0,100)));
+    recentGuest.hidden = false;
+    arrivalUntil = until;
+    return;
+  }
+  if (event.appearance && event.appearance !== dancer.appearance) {
+    dancer = addDancer({...event, name:dancer.name, until:dancer.until});
+  }
   clearSpeech(dancer);
   const canvas = document.createElement('canvas');
   canvas.width = 512;
@@ -340,6 +352,7 @@ function addDancer(event) {
 }
 function removeDancer(id){const d=dancers.get(id);clearSpeech(d);scene.remove(d.root);d.mixer.stopAllAction();d.mixer.uncacheRoot(d.body);d.label.remove();d.ring.geometry.dispose();d.body.traverse(mesh=>{if(mesh.isMesh) for(const material of [mesh.material].flat())material.dispose()});dancers.delete(id)}
 function receive(event, quiet = false) {
+  if (event.type !== 'gift') return;
   if (!model) {
     if (pending.length >= 150) pending.shift();
     pending.push({...event, at:event.at || Date.now(), quiet});
@@ -350,6 +363,8 @@ function receive(event, quiet = false) {
   if (processed.size > 3000) processed.delete(processed.values().next().value);
   const dancer = addDancer(event);
   if (!dancer || event.type === 'join') return;
+  const comment = speechPending.get(event.userId);
+  if (comment) { speechPending.delete(event.userId); showSpeech(comment); }
   if (event.action === 'duet') {
     const at = event.at || Date.now();
     if (at + DUET_WAIT_MS > Date.now() && !duet?.ids.includes(event.userId)) {
@@ -374,7 +389,7 @@ function receive(event, quiet = false) {
   }
   if (event.action === 'battle') battle(event.name);
   queue.push(event);
-  if (queue.length > 60) queue.shift();
+  if (queue.length > 12) queue.shift();
   showNext();
   const line = document.createElement('div');
   line.textContent = event.name + ' · ' + event.gift + ' ×' + event.count;
@@ -454,8 +469,7 @@ Promise.all([loader.loadAsync('/assets/guest.glb'), loader.loadAsync('/assets/wo
     model = true;
     $('loading').hidden = true;
     pending.splice(0).forEach(event => receive(event, event.quiet));
-    for (const event of speechPending.values()) showSpeech(event);
-    speechPending.clear();
+    for (const event of [...speechPending.values()]) showSpeech(event);
     if (query.get('demo') === '10') {
       const names = ['Алихан', 'Аружан', 'Данияр', 'Айша', 'Мирас', 'Амина', 'Ерлан', 'Дана', 'Әли', 'Жансая'];
       names.forEach((name, index) => {
@@ -552,6 +566,9 @@ function animateGuest(dancer, dt, time, pairIndex) {
   const elapsed = (performance.now() - (dancer.started ?? dancer.entered)) / 1000;
   const paired = pairIndex >= 0;
   const move = paired ? 'waltz' : now < shashuUntil ? 'shashu' : dancer.boost > now ? dancer.move : 'join';
+  const cycle = (age + dancer.phase) % 18;
+  const resting = move === 'join' && dancer.boost <= now && cycle > 14;
+  const restBlend = resting ? Math.min(1, (cycle-14)*2, (18-cycle)*2) : 0;
   const fast = ['dance','breakdance','battle','shashu','galaxy'].includes(move);
   const floorwork = move === 'breakdance' || move === 'battle';
   dancer.beat = (dancer.beat ?? dancer.phase) + dt * (move === 'waltz' ? 3 : fast ? 8 : 4.5 + dancer.slot % 3 * .5);
@@ -564,7 +581,7 @@ function animateGuest(dancer, dt, time, pairIndex) {
   const wave = Math.sin(beat);
   const shoulderDance = move === 'circle';
   if (!floorwork && move !== 'waltz') {
-    dancer.action.timeScale = move === 'shashu' ? 1.65 : fast ? 1.3 : .90 + dancer.groove * .085;
+    dancer.action.timeScale = resting ? .35 : move === 'shashu' ? 1.4 : fast ? 1.3 : .90 + dancer.groove * .085;
     dancer.mixer.update(dt);
   } else {
     for (const {bone, name, pose} of dancer.joints) {
@@ -605,7 +622,13 @@ function animateGuest(dancer, dt, time, pairIndex) {
       bone.quaternion.copy(pose).multiply(offset.setFromEuler(angles));
     }
   }
-  for (const {bone, previous} of dancer.joints) bone.quaternion.copy(previous.slerp(bone.quaternion, transition));
+  for (const {bone, previous, pose, name} of dancer.joints) {
+    if (restBlend) {
+      bone.quaternion.slerp(pose, restBlend*.85);
+      if (name === 'head') bone.quaternion.multiply(offset.setFromAxisAngle(THREE.Object3D.DEFAULT_UP, Math.sin(age*1.1)*.2*restBlend));
+    }
+    bone.quaternion.copy(previous.slerp(bone.quaternion, transition));
+  }
   destination.copy(dancer.home);
   destination.y += floorwork ? 0 : Math.abs(wave) * .065;
   destination.x += floorwork ? 0 : wave * .16;
@@ -683,7 +706,7 @@ function render(timestamp) {
   centerWash.color.setHex(galaxy ? 0xffc687 : discoMode ? 0xffae70 : 0xffd3a5);
   centerWash.intensity = duet ? 170 : discoMode ? 140 + pulse*12 : 132;
   floorTrim[0].material.color.setHex(galaxy ? 0xffe2a3 : duet ? 0xffedcb : discoMode ? 0xffb376 : 0xe5a25f);
-  danceCircle.material.color.setHex(galaxy ? 0x7f422b : 0x623a2d);
+  danceCircle.material.color.setHex(galaxy ? 0x463a65 : 0x343c53);
   const progress = fireworks ? 10000 : totalLikes % 10000;
   if ($('mission-progress').value !== progress) {
     $('mission-progress').value = progress;
@@ -802,7 +825,7 @@ $('disconnect').onclick = async () => {
   try { await adminRequest('/api/disconnect'); }
   catch (error) { $('connection-message').textContent = error.message; }
 };
-const demoGifts = {1:['Раушан','join'],3:['Шашу','shashu'],5:['Саусақ жүрегі','circle'],10:['Қызыл раушан','dance'],
+const demoGifts = {1:['Раушан','join'],5:['Саусақ жүрегі','shashu'],10:['Қызыл раушан','dance'],
   30:['Пончик','duet'],100:['Қос қол жүрегі','breakdance'],1000:['Ғаламшар','galaxy'],battle:['Тәж','battle']};
 let demoIndex = 0;
 $('preview').onclick = () => {
@@ -814,6 +837,7 @@ $('preview').onclick = () => {
   const appearance = action === 'duet' ? (demoIndex % 2 ? 'man' : 'woman') : undefined;
   receive({type:'gift',gift,action,appearance,coins:Number(selected)||0,id,userId:id,name:'@qonaq_' + demoIndex,count:1,total:1,demo:true});
 };
+$('preview-chat').onclick = () => showSpeech({userId:demoIndex ? 'demo-' + demoIndex : 'viewer-demo', name:'Қонақ', message:'Сәлем, достар!'});
 function startFireworks(demo = false) {
   fireworksUntil = Date.now() + 6000;
   queue.push({name:'Барша көрермен', gift:'10 000 лайк', action:'fireworks', demo});
@@ -847,7 +871,7 @@ function openSocket() {
       case 'history': {
         updateLikes(data.likes,false);
         const recent = new Map();
-        for (const guest of data.entrances || []) recent.set(guest.userId,{...guest,id:'join:' + guest.userId + ':' + guest.at});
+
         const cutoff = Date.now() - DANCE_MS;
         for (const gift of data.gifts) {
           if (gift.at <= cutoff) continue;

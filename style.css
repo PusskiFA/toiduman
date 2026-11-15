@@ -54,3 +54,4 @@ body,#loading{background:#342117}
 #alert{background:linear-gradient(110deg,#553222f0,#2c1b15f1);border-color:#f0ba7875;box-shadow:0 0 32px #e5a35c24}
 .guest-badge{background:#342118f2}
 .guest-photo{background:#7e4e33}
+body,#loading{background:#171c32}.bottom{background:linear-gradient(transparent,#171c32dd)}#alert{background:linear-gradient(110deg,#303852f5,#22283ef5);border-color:#bba4e675}.guest-badge{background:#252d43f2}.guest-photo{background:#53647d}#recent-guest{top:200px;bottom:auto;padding:10px 14px;border-radius:14px;background:#252d43ed;color:#fff;max-width:80%;overflow-wrap:anywhere}
