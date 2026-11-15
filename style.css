@@ -15,15 +15,15 @@ aside select{width:100%;font:inherit;background:#17131b;color:white;border:1px s
 aside:not(.open){visibility:hidden}
 @media(max-width:600px){#settings-toggle{right:20px;top:80px}}
 .gift-guide{display:grid;grid-template-columns:repeat(6,minmax(86px,1fr));gap:6px}
-.gift-guide li{display:flex;align-items:center;gap:6px;padding:6px 7px;border-radius:9px;background:#23180fec}
-.gift-card-icon{display:grid;place-items:center;flex:0 0 28px;width:28px;height:28px;color:#ff9caa;font-size:20px}
+.gift-guide li{display:flex;align-items:center;gap:6px;padding:6px 7px;border-radius:12px;background:#202c43f2;border-color:#8eb5c970;min-height:88px}
+.gift-card-icon{display:grid;place-items:center;flex:0 0 40px;width:40px;height:40px;color:#ff9caa;font-size:20px}
 .gift-card-icon img{width:100%;height:100%;object-fit:contain}
-.gift-card-text{display:grid;line-height:1.2}
-.gift-card-text b{font-size:11px;margin:0;color:#ffddb1}
-.gift-card-text small{font-size:9px;color:#ecb879;letter-spacing:0}
-.gift-card-text>span{font-size:10px;color:#fff1df}
+.gift-card-text{display:grid;gap:3px;min-width:0;line-height:1.2;overflow-wrap:anywhere}
+.gift-card-text b{font-size:16px;margin:0;color:#fff5e4}
+.gift-card-text small{font-size:15px;font-weight:800;color:#ffe09b;letter-spacing:0}
+.gift-card-text>span{font-size:14px;color:#dcf5f1}
 @media(max-width:780px){.gift-guide{grid-template-columns:repeat(3,minmax(79px,1fr))}.gift-guide li{padding:4px}}
-#stage>.gift-guide{position:absolute;z-index:2;top:96px;left:28px;right:28px;margin:0;grid-template-columns:repeat(7,minmax(0,1fr));pointer-events:none}
+#stage>.gift-guide{position:absolute;z-index:2;top:96px;left:28px;right:28px;margin:0;grid-template-columns:repeat(6,minmax(0,1fr));pointer-events:none}
 #alert{top:166px}
 #settings-toggle{top:27px;right:28px}
 body:has(#settings-toggle:not([hidden])) .live-status{right:190px}
@@ -33,7 +33,7 @@ body:has(#settings-toggle:not([hidden])) .live-status{right:190px}
 .live-metrics div{display:grid;gap:4px;padding:10px;border:1px solid #dcab7850;border-radius:9px}
 .live-metrics strong{color:#ffd598;font-size:22px}
 .live-metrics span{font-size:11px;color:#e4d4ce}
-@media(max-width:780px){#stage>.gift-guide{left:14px;right:14px;top:88px;grid-template-columns:repeat(4,minmax(0,1fr));gap:4px}.gift-card-icon{flex-basis:19px;width:19px;height:20px;font-size:16px}.gift-card-text b{font-size:9px}.gift-card-text>span{font-size:9px}#alert{top:190px}#settings-toggle{top:53px;right:15px;padding:5px 8px}.live-status, body:has(#settings-toggle:not([hidden])) .live-status{right:15px;top:20px;padding:6px 8px;font-size:8px}.brand{left:14px;top:15px}.brand small{letter-spacing:1px}}
+@media(max-width:780px){#stage>.gift-guide{left:14px;right:14px;top:88px;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.gift-card-icon{flex-basis:30px;width:30px;height:30px;font-size:26px}.gift-card-text b{font-size:12px}.gift-card-text small{font-size:13px}.gift-card-text>span{font-size:12px}#alert{top:285px}#settings-toggle{top:53px;right:15px;padding:5px 8px}.live-status, body:has(#settings-toggle:not([hidden])) .live-status{right:15px;top:20px;padding:6px 8px;font-size:8px}.brand{left:14px;top:15px}.brand small{letter-spacing:1px}}
 .like-mission{display:grid;grid-template-columns:1fr auto;gap:5px 12px;max-width:380px;padding:8px 12px;border:1px solid #d7a96455;background:#24171ce8;border-radius:9px;color:#ffe2b1;font-size:12px}
 .like-mission strong{font-variant-numeric:tabular-nums}.like-mission progress{grid-column:span 2;width:100%;height:5px;accent-color:#ffbc65}
 #admin-key-box[hidden]{display:none}
@@ -44,7 +44,7 @@ body:has(#settings-toggle:not([hidden])) .live-status{right:190px}
 .guest-badge b{overflow:hidden;text-overflow:ellipsis}
 .guest-photo{display:grid;position:relative;place-items:center;flex:0 0 19px;width:19px;height:19px;background:#603b67;border-radius:50%;overflow:hidden;font-size:11px;font-weight:800}
 .guest-photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-#recent-guest{position:absolute;z-index:2;left:28px;bottom:155px;max-width:65%;font-size:13px;pointer-events:none}
+#recent-guest{position:absolute;z-index:2;left:28px;bottom:155px;max-width:80%;font-size:clamp(20px,2.3vw,28px);font-weight:600;line-height:1.35;pointer-events:none}
 #recent-guest .guest-badge{padding-right:10px}
 #recent-guest .guest-badge>span:last-child{color:#efc69b}
 #alert{z-index:3}
@@ -54,4 +54,7 @@ body,#loading{background:#342117}
 #alert{background:linear-gradient(110deg,#553222f0,#2c1b15f1);border-color:#f0ba7875;box-shadow:0 0 32px #e5a35c24}
 .guest-badge{background:#342118f2}
 .guest-photo{background:#7e4e33}
-body,#loading{background:#171c32}.bottom{background:linear-gradient(transparent,#171c32dd)}#alert{background:linear-gradient(110deg,#303852f5,#22283ef5);border-color:#bba4e675}.guest-badge{background:#252d43f2}.guest-photo{background:#53647d}#recent-guest{top:200px;bottom:auto;padding:10px 14px;border-radius:14px;background:#252d43ed;color:#fff;max-width:80%;overflow-wrap:anywhere}
+body,#loading{background:#171c32}.bottom{background:linear-gradient(transparent,#171c32dd)}#alert{background:linear-gradient(110deg,#303852f5,#22283ef5);border-color:#bba4e675}.guest-badge{background:#252d43f2}.guest-photo{background:#53647d}#recent-guest{top:210px;bottom:auto;padding:10px 14px;border-radius:14px;background:#252d43ed;color:#fff;max-width:80%;overflow-wrap:anywhere}
+
+#stage>.gift-guide li:first-child{border-color:#ffb5ca;background:#3a2946f5}.gift-card-icon{font-size:32px}#recent-guest{border:1px solid #99e4dc;color:#fff}#recent-guest strong{color:#a9eee4}@media(min-width:781px){#alert{top:285px}}@media(max-width:780px){#recent-guest{top:385px;left:14px;max-width:calc(100% - 28px);font-size:20px}.gift-guide li{gap:5px}.gift-card-icon{font-size:26px}}
+@media(min-width:781px) and (max-aspect-ratio:3/4){#stage>.gift-guide{grid-template-columns:repeat(3,minmax(0,1fr))}.gift-guide li{min-height:132px;padding:12px}.gift-card-icon{flex-basis:56px;width:56px;height:56px;font-size:44px}.gift-card-text b{font-size:25px}.gift-card-text small{font-size:24px}.gift-card-text>span{font-size:23px}#recent-guest{top:390px;font-size:30px}#alert{top:490px}}

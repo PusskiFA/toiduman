@@ -209,11 +209,11 @@ function showSpeech(event) {
   canvas.width = Math.max(112, Math.ceil(Math.max(...lines.map(line => ctx.measureText(line).width))) + 48);
   canvas.height = lines.length * 38 + 35;
   const center = canvas.width / 2;
-  ctx.fillStyle = '#21142a';
+  ctx.fillStyle = '#18243b';
   ctx.beginPath();
   ctx.roundRect(3,3,canvas.width-6,canvas.height-16,18);
   ctx.fill();
-  ctx.strokeStyle = '#e9b479';
+  ctx.strokeStyle = '#99e4dc';
   ctx.lineWidth = 3;
   ctx.stroke();
   ctx.beginPath();
@@ -228,8 +228,9 @@ function showSpeech(event) {
   const map = new THREE.CanvasTexture(canvas);
   map.colorSpace = THREE.SRGBColorSpace;
   const speech = new THREE.Sprite(new THREE.SpriteMaterial({map, transparent:true, depthTest:false, depthWrite:false, toneMapped:false}));
-  const height = 3.4 * canvas.height / 512;
-  speech.scale.set(3.4 * canvas.width / 512,height,1);
+  const speechWidth = 5.6;
+  const height = speechWidth * canvas.height / 512;
+  speech.scale.set(speechWidth * canvas.width / 512,height,1);
   speech.position.y = 3.28 + height/2;
   speech.renderOrder = 5;
   dancer.root.add(speech);
