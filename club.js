@@ -12,6 +12,14 @@ document.querySelectorAll('.gift-card-icon img').forEach(img => {
   showIcon();
 });
 const query = new URLSearchParams(location.search);
+// LIVE timestamps belong to the server, not the viewer's Windows clock.
+let clockEpoch = Date.now(), clockTick = performance.now();
+function serverNow() { return clockEpoch + performance.now() - clockTick; }
+function syncClock(timestamp) {
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return;
+  clockEpoch = timestamp;
+  clockTick = performance.now();
+}
 const liveDiagnostics = document.createElement('p');
 liveDiagnostics.className = 'muted';
 liveDiagnostics.setAttribute('role','status');
@@ -125,7 +133,7 @@ function guestBadge(event) {
 }
 
 function announceEntrance(event) {
-  const time = Date.now();
+  const time = serverNow();
   if (time < nextArrivalAt || nextArrivalId === event.userId && time < arrivalUntil) return;
   nextArrivalAt = time + 1800;
   nextArrivalId = event.userId;
@@ -176,8 +184,8 @@ function clearSpeech(dancer) {
 
 function showSpeech(event) {
   const text = String(event.message || '').trim();
-  const until = (event.at || Date.now()) + CHAT_MS;
-  if (!text || until <= Date.now()) return;
+  const until = (event.at || serverNow()) + CHAT_MS;
+  if (!text || until <= serverNow()) return;
   if (!model) {
     speechPending.delete(event.userId);
     speechPending.set(event.userId, event);
@@ -280,7 +288,7 @@ function outfit(texture, variant) {
   return map;
 }
 function addDancer(event) {
-  const now = Date.now();
+  const now = serverNow();
   const until = event.until ?? ((event.at || now) + DANCE_MS);
   if (until <= now) return;
   if (!model) {
@@ -365,7 +373,7 @@ function receive(event, quiet = false) {
   if (event.type !== 'gift') return;
   if (!model) {
     if (pending.length >= 150) pending.shift();
-    pending.push({...event, at:event.at || Date.now(), quiet});
+    pending.push({...event, at:event.at || serverNow(), quiet});
     return;
   }
   if (processed.has(event.id)) return;
@@ -376,26 +384,26 @@ function receive(event, quiet = false) {
   const comment = speechPending.get(event.userId);
   if (comment) { speechPending.delete(event.userId); showSpeech(comment); }
   if (event.action === 'duet') {
-    const at = event.at || Date.now();
-    if (at + DUET_WAIT_MS > Date.now() && !duet?.ids.includes(event.userId)) {
+    const at = event.at || serverNow();
+    if (at + DUET_WAIT_MS > serverNow() && !duet?.ids.includes(event.userId)) {
       if (duetTickets.size >= MAX_DANCERS && !duetTickets.has(event.userId)) duetTickets.delete(duetTickets.keys().next().value);
       duetTickets.set(event.userId, at + DUET_WAIT_MS);
     }
   }
   if (event.action === 'shashu' && !quiet) startShashu();
   const duration = event.action === 'flip' ? 1450 : event.action === 'galaxy' ? 12000 : 8000;
-  const timeLeft = (event.at || Date.now()) + duration - Date.now();
+  const timeLeft = (event.at || serverNow()) + duration - serverNow();
   if (quiet && timeLeft <= 0) return;
   if (event.combo && dancer.combo === event.combo) return;
   dancer.combo = event.combo;
   dancer.move = event.action || 'join';
   dancer.started = performance.now() - Math.max(0, duration - timeLeft);
-  dancer.boost = Date.now() + Math.max(0, timeLeft);
-  dancer.highlight = Date.now() + 5000;
+  dancer.boost = serverNow() + Math.max(0, timeLeft);
+  dancer.highlight = serverNow() + 5000;
   if (dancer.move === 'breakdance') discoUntil = Math.max(discoUntil,dancer.boost);
   if (quiet) return;
   if (event.action === 'galaxy') {
-    galaxyUntil = Date.now() + 12000;
+    galaxyUntil = serverNow() + 12000;
   }
   if (event.action === 'battle') battle(event.name);
   queue.push(event);
@@ -495,7 +503,7 @@ Promise.all([loader.loadAsync('/assets/guest.glb'), loader.loadAsync('/assets/wo
         const demoChat = () => {
           samples.forEach(([index,message], i) => setTimeout(() => {
             const userId = 'crowd-demo-' + index;
-            if (dancers.has(userId)) showSpeech({userId, message, at:Date.now()});
+            if (dancers.has(userId)) showSpeech({userId, message, at:serverNow()});
           }, i * 2200));
         };
         demoChat();
@@ -557,7 +565,7 @@ effectRing.position.copy(floorCenter).y += .025;
 effectRing.visible = false;
 scene.add(effectRing);
 function startShashu() {
-  shashuUntil = Date.now() + 9000;
+  shashuUntil = serverNow() + 9000;
 }
 for (const side of [-1,1]) {
   box(.16,4,.16,side*11,2,-4,side<0 ? neon : cyan);
@@ -571,7 +579,7 @@ const disco=new THREE.Mesh(new THREE.SphereGeometry(.7,24,16),new THREE.MeshStan
 const offset = new THREE.Quaternion(), angles = new THREE.Euler();
 const destination = new THREE.Vector3();
 function animateGuest(dancer, dt, time, pairIndex) {
-  const now = Date.now();
+  const now = serverNow();
   const remaining = (dancer.until - now) / 1000;
   const age = (performance.now() - dancer.entered) / 1000;
   const elapsed = (performance.now() - (dancer.started ?? dancer.entered)) / 1000;
@@ -698,7 +706,7 @@ function render(timestamp) {
   lastDraw = timestamp;
   nextDraw = nextDraw ? Math.max(nextDraw + FRAME_MS, timestamp + .25) : timestamp + FRAME_MS;
   const time = timestamp / 1000;
-  const now = Date.now();
+  const now = serverNow();
   updateDuet(now);
   const pulse = Math.exp(-4 * ((time * 2) % 1));
   const shashu = now < shashuUntil;
@@ -850,7 +858,7 @@ $('preview').onclick = () => {
 };
 $('preview-chat').onclick = () => showSpeech({userId:demoIndex ? 'demo-' + demoIndex : 'viewer-demo', name:'Қонақ', message:'Сәлем, достар!'});
 function startFireworks(demo = false) {
-  fireworksUntil = Date.now() + 6000;
+  fireworksUntil = serverNow() + 6000;
   queue.push({name:'Барша көрермен', gift:'10 000 лайк', action:'fireworks', demo});
   showNext();
 }
@@ -867,6 +875,7 @@ function openSocket() {
   const socket = new WebSocket(scheme + '://' + location.host);
   socket.onmessage = event => {
     const data = JSON.parse(event.data);
+    syncClock(data.serverTime);
     switch (data.type) {
       case 'diagnostics':
         giftDiagnostics = data;
@@ -887,7 +896,7 @@ function openSocket() {
         updateLikes(data.likes,false);
         const recent = new Map();
 
-        const cutoff = Date.now() - DANCE_MS;
+        const cutoff = serverNow() - DANCE_MS;
         for (const gift of data.gifts) {
           if (gift.at <= cutoff) continue;
           if (recent.get(gift.userId)?.at > gift.at) continue;

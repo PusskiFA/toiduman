@@ -35,6 +35,7 @@ test('switching LIVE accounts routes gifts and ignores stale connections', async
   connections[1].emit('gift', rose);
   assert.equal(messages.filter(m=>m.type==='gift').length,2,'same gift key is valid after switching accounts');
   assert.equal(messages.filter(m=>m.type==='gift').at(-1).action,'join');
+  assert.ok(Number.isFinite(messages.filter(m=>m.type==='gift').at(-1).serverTime));
   connections[1].emit('gift', rose);
   assert.equal(messages.filter(m=>m.type==='gift').length,2,'duplicate combo does not add another guest');
   connections[0].emit('gift', {...rose, groupId:'late'});
@@ -50,4 +51,22 @@ test('switching LIVE accounts routes gifts and ignores stale connections', async
   connections[2].emit('gift',{...rose,groupId:'new-retry'});
   assert.equal(messages.filter(m=>m.type==='gift').length,3);
   assert.equal(messages.filter(m=>m.type==='status').at(-1).username,'erll.04');
+});
+
+test('gift lifetime uses server time despite wrong or changed computer clock', () => {
+  const source = readFileSync('club.js','utf8');
+  const clock = source.slice(source.indexOf('let clockEpoch'), source.indexOf('const liveDiagnostics'));
+  for (const skew of [-86400000, 86400000]) {
+    let tick = 100, wall = 1700000000000 + skew;
+    const ctx = vm.createContext({Date:{now:()=>wall}, performance:{now:()=>tick}});
+    vm.runInContext(clock,ctx);
+    vm.runInContext('syncClock(1700000000000)',ctx);
+    assert.equal(vm.runInContext('serverNow()',ctx),1700000000000);
+    wall += 3600000;
+    tick += 59000;
+    assert.equal(vm.runInContext('serverNow()',ctx),1700000059000);
+    assert.ok(1700000000000 + 60000 > vm.runInContext('serverNow()',ctx));
+    tick += 1001;
+    assert.ok(1700000000000 + 60000 < vm.runInContext('serverNow()',ctx));
+  }
 });

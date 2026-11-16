@@ -25,7 +25,10 @@ const history = [], seen = new Map(), appearances = new Map();
 let diagnostics = {received:0, accepted:0, lastGiftAt:0, issue:''};
 function reportGifts() { broadcast({type:'diagnostics', ...diagnostics}); }
 
-function broadcast(event) { for (const client of sockets.clients) if (client.readyState === 1) client.send(JSON.stringify(event)); }
+function broadcast(event) {
+  const message = JSON.stringify({...event, serverTime:Date.now()});
+  for (const client of sockets.clients) if (client.readyState === 1) client.send(message);
+}
 function update(state, message = '') { status = { state, message, username }; broadcast({ type: 'status', ...status }); }
 function viewer(data) {
   const user = data.user || data;
@@ -56,9 +59,9 @@ function giftReaction(data) {
   return {gift, coins, action:'join'};
 }
 sockets.on('connection', client => {
-  client.send(JSON.stringify({ type:'status', ...status }));
-  client.send(JSON.stringify({type:'history', gifts:history, likes:likeTotal}));
-  client.send(JSON.stringify({type:'diagnostics', ...diagnostics}));
+  client.send(JSON.stringify({ type:'status', ...status, serverTime:Date.now() }));
+  client.send(JSON.stringify({type:'history', gifts:history, likes:likeTotal, serverTime:Date.now()}));
+  client.send(JSON.stringify({type:'diagnostics', ...diagnostics, serverTime:Date.now()}));
 });
 async function connect(token) {
   if (token !== generation) return;
