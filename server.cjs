@@ -22,13 +22,15 @@ function authorizeAdmin(req, res, next) {
 const sockets = new WebSocketServer({ server });
 let connection, generation = 0, retry, username = '', status = { state: 'offline' }, likeTotal = 0;
 const history = [], seen = new Map(), appearances = new Map();
+let diagnostics = {received:0, accepted:0, lastGiftAt:0, issue:''};
+function reportGifts() { broadcast({type:'diagnostics', ...diagnostics}); }
 
 function broadcast(event) { for (const client of sockets.clients) if (client.readyState === 1) client.send(JSON.stringify(event)); }
 function update(state, message = '') { status = { state, message, username }; broadcast({ type: 'status', ...status }); }
 function viewer(data) {
   const user = data.user || data;
-  const handle = String(user.uniqueId || user.displayId || '').trim();
-  const userId = [user.id,user.idStr,user.userId,data.userId,handle]
+  const handle = String(user.uniqueId || user.displayId || data.uniqueId || data.displayId || '').trim();
+  const userId = [user.idStr,user.id,user.userId,data.userId,handle]
     .map(value=>String(value ?? '').trim()).find(value=>value && value !== '0');
   if (!userId) return;
   const nickname = String(user.nickname || '').trim();
@@ -56,6 +58,7 @@ function giftReaction(data) {
 sockets.on('connection', client => {
   client.send(JSON.stringify({ type:'status', ...status }));
   client.send(JSON.stringify({type:'history', gifts:history, likes:likeTotal}));
+  client.send(JSON.stringify({type:'diagnostics', ...diagnostics}));
 });
 async function connect(token) {
   if (token !== generation) return;
@@ -63,8 +66,9 @@ async function connect(token) {
   // Preloading the gift catalog requires a separate paid signing endpoint.
   const current = new TikTokLiveConnection(username, { processInitialData: false });
   connection = current;
+  const active = () => token === generation && current === connection;
   current.on(WebcastEvent.CHAT, data => {
-    if(token !== generation) return;
+    if (!active()) return;
     const comment = String(data.comment || '').replace(/\s+/gu, ' ').trim();
     if (!comment) return;
     const command = comment.toLowerCase().replace(/^[!/]/, '');
@@ -81,38 +85,59 @@ async function connect(token) {
     broadcast({type:'chat', ...guest, appearance, message:Array.from(comment).slice(0, 100).join(''), at});
   });
   current.on(WebcastEvent.LIKE, data => {
-    if (token !== generation) return;
+    if (!active()) return;
     const total = Number(data.totalLikeCount) || 0;
     likeTotal = total > 0 ? Math.max(likeTotal, total) : likeTotal + (Number(data.likeCount) || 0);
     broadcast({type:'likes',count:likeTotal});
   });
   current.on(WebcastEvent.GIFT, data => {
-    if (token !== generation) return;
+    if (!active()) return;
+    diagnostics.received++;
+    diagnostics.lastGiftAt = Date.now();
     const guest = viewer(data);
-    if (!guest) return;
+    if (!guest) {
+      diagnostics.issue = 'Сыйлық келді, бірақ жіберушінің ID-і жоқ.';
+      reportGifts();
+      return;
+    }
     const giftId = data.giftId || data.gift?.id;
     const combo = [data.groupId, data.common?.msgId, data.msgId, data.logId].find(value => value && String(value) !== '0') || Date.now();
     const key = `${guest.userId}:${giftId}:${combo}`;
-    const count = Number(data.repeatCount || 1);
+    const count = Math.max(1, Math.floor(Number(data.repeatCount) || 1));
     const prior = seen.get(key) || 0;
-    if (count <= prior) return;
+    if (count <= prior) { reportGifts(); return; }
     seen.set(key, count);
     if (seen.size > 5000) seen.delete(seen.keys().next().value);
     const gift = { type:'gift', ...guest, ...giftReaction(data), id:`${key}:${count}`,
       combo:key, count:count-prior, total:count, at:Date.now() };
     history.push(gift); if (history.length > 150) history.shift(); broadcast(gift);
+    diagnostics.accepted += gift.count;
+    diagnostics.issue = '';
+    reportGifts();
   });
-  current.on('error', () => {});
-  current.on('disconnected', () => { if (token === generation) schedule(token, 'Связь потеряна. Переподключение через 15 секунд'); });
-  current.on('streamEnd', () => { if (token === generation) { generation++; clearTimeout(retry); update('offline', 'Эфир завершён'); } });
-  try { await current.connect(); if (token !== generation) { current.disconnect(); return; } clearTimeout(retry); update('connected', 'Эфир подключён'); }
-  catch (error) { if (token === generation) schedule(token, String(error.message || error).slice(0, 250)); }
+  current.on('error', error => {
+    if (!active()) return;
+    diagnostics.issue = String(error?.exception?.message || error?.message || error?.info || 'TikTok байланысының қатесі').slice(0,250);
+    reportGifts();
+  });
+  current.on('disconnected', () => { if (active()) schedule(token, 'Связь потеряна. Переподключение через 15 секунд'); });
+  current.on('streamEnd', () => { if (active()) { generation++; clearTimeout(retry); update('offline', 'Эфир завершён'); } });
+  try { await current.connect(); if (!active()) { current.disconnect(); return; } clearTimeout(retry); update('connected', 'Эфир подключён'); }
+  catch (error) { if (active()) schedule(token, String(error.message || error).slice(0, 250)); }
 }
-function schedule(token, message) { clearTimeout(retry); update('retrying', message); retry = setTimeout(() => { connection?.disconnect(); connect(token); }, 15000); }
+function schedule(token, message) { clearTimeout(retry); update('retrying', message); retry = setTimeout(() => {
+  if (token !== generation) return;
+  const previous = connection;
+  connection = null;
+  previous?.disconnect();
+  connect(token);
+}, 15000); }
 app.post('/api/connect', authorizeAdmin, (req, res) => {
   const name = String(req.body.username || '').trim().replace(/^@/, '');
   if (!/^[\w.]{2,32}$/.test(name)) return res.status(400).json({ error: 'Введите ник TikTok без ссылки' });
-  generation++; clearTimeout(retry); connection?.disconnect(); username = name; likeTotal = 0; history.length = 0; seen.clear(); appearances.clear(); broadcast({ type: 'reset' }); connect(generation); res.json({ ok: true });
+  generation++; clearTimeout(retry); connection?.disconnect(); username = name; likeTotal = 0; history.length = 0; seen.clear(); appearances.clear();
+  diagnostics = {received:0, accepted:0, lastGiftAt:0, issue:''};
+  broadcast({ type: 'reset' }); reportGifts(); connect(generation); res.json({ ok: true });
 });
 app.post('/api/disconnect', authorizeAdmin, (_, res) => { generation++; clearTimeout(retry); connection?.disconnect(); connection = null; update('offline', 'Отключено'); res.json({ ok: true }); });
 app.get('/api/status', (_, res) => res.json({...status, requiresKey:Boolean(adminKey)}));

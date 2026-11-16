@@ -12,6 +12,15 @@ document.querySelectorAll('.gift-card-icon img').forEach(img => {
   showIcon();
 });
 const query = new URLSearchParams(location.search);
+const liveDiagnostics = document.createElement('p');
+liveDiagnostics.className = 'muted';
+liveDiagnostics.setAttribute('role','status');
+$('connection-message').after(liveDiagnostics);
+let giftDiagnostics = {received:0, accepted:0, issue:''};
+function renderDiagnostics() {
+  liveDiagnostics.textContent = `Сыйлық оқиғалары: ${giftDiagnostics.received} · Қабылданған сыйлықтар: ${giftDiagnostics.accepted} · Сахна: ${model ? '3D дайын' : 'жүктелуде'}`
+    + (giftDiagnostics.issue ? ' · ' + giftDiagnostics.issue : '');
+}
 const capture = query.has('capture');
 document.body.classList.toggle('capture', capture);
 const scene = new THREE.Scene();
@@ -468,6 +477,7 @@ Promise.all([loader.loadAsync('/assets/guest.glb'), loader.loadAsync('/assets/wo
       humans[key] = {scene:object, clip, idle:key === 'man' ? man.animations.find(animation => animation.name === 'Idle') : null, scale:2.65 / height};
     }
     model = true;
+    renderDiagnostics();
     $('loading').hidden = true;
     pending.splice(0).forEach(event => receive(event, event.quiet));
     for (const event of [...speechPending.values()]) showSpeech(event);
@@ -802,7 +812,7 @@ window.addEventListener('keydown', event => {
   if (event.altKey && event.code === 'KeyA') { event.preventDefault(); setPanel(!$('settings').classList.contains('open')); }
 });
 document.body.classList.toggle('demo', new URLSearchParams(location.search).has('demo'));
-$('camera').onclick=()=>angle=(angle+1)%3;$('capture').onclick=()=>window.open('/?capture=1','_blank');$('username').value=localStorage.getItem('tiktokUsername')||'nanaararayou';
+$('camera').onclick=()=>angle=(angle+1)%3;$('capture').onclick=()=>window.open('/?capture=1','_blank');$('username').value=localStorage.getItem('tiktokUsername')||'';
 async function adminRequest(path, body) {
   const secret = $('admin-key').value;
   const response = await fetch(path, {
@@ -858,6 +868,10 @@ function openSocket() {
   socket.onmessage = event => {
     const data = JSON.parse(event.data);
     switch (data.type) {
+      case 'diagnostics':
+        giftDiagnostics = data;
+        renderDiagnostics();
+        break;
       case 'gift': receive(data); break;
       case 'chat': showSpeech(data); break;
       case 'join': {
@@ -898,9 +912,10 @@ function openSocket() {
         $('like-count').textContent = '0';
         break;
       case 'status':
+        if (data.username && document.activeElement !== $('username')) $('username').value = data.username;
         document.body.classList.toggle('connected',data.state==='connected');
         $('status').textContent = ({connected:'LIVE · @'+data.username,connecting:'ҚОСЫЛУ',retrying:'ҚАЙТА ҚОСЫЛУ',offline:'ЭФИР ҚОСЫЛМАҒАН'})[data.state];
-        $('connection-message').textContent = data.message || 'TikTok LIVE эфирін баста да, атыңды енгіз.';
+        $('connection-message').textContent = (data.username ? '@' + data.username + ' · ' : '') + (data.message || 'TikTok LIVE эфирін баста да, атыңды енгіз.');
         $('connect').disabled = data.state === 'connecting';
         $('preview').disabled = data.state === 'connected' && !query.has('demo');
         break;
